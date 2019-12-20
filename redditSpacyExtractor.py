@@ -194,9 +194,9 @@ class RedditSpacyExtractor:
 
             if len(comments) != 0:
                 last = comments[-1]
-                self.after = last["created_utc"] - (100)
+                self.after = last["created_utc"] - (10000)
             else:
-                self.after -= 100
+                self.after -= 10000
 
             print("Saving collectionp")
             with open(self.collectionp_file, "wb") as pklfile:

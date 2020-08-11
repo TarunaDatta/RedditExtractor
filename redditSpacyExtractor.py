@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import string
 import pickle
 import os
+import json
 # import re
 import spacy
 import argparse
@@ -31,7 +32,14 @@ class RedditSpacyExtractor:
                  counter_file="vocab_counter.pkl",
                  collectionp_file="collection.pkl",
                  sentence_file="sentences.txt",
+                 mode=all,
                  spacy_use=False):
+        if mode == "userwise":
+            self.mode = "userwise"
+            self.users = dict()
+        else:
+            self.mode = "all"
+            self.users = None
         self.subreddit = subreddit
         self.min_score = min_score
         self.min_len = min_len
@@ -209,22 +217,57 @@ class RedditSpacyExtractor:
             with open(self.counter_file, "wb") as pklfile:
                 pickle.dump(self.counter, pklfile)
 
-            print("Cleaning sentences")
-            if self.spacy_use:
-                print("Using Spacy")
-                cleaned_sents = [self.commentCleaner(comment)
-                                 for comment in comments]
-            else:
-                print("Using NLTK")
-                cleaned_sents = [self.commentCleaner(comment)
-                                 for comment in comments]
+            if self.mode == "all":
+                print("Cleaning sentences")
+                if self.spacy_use:
+                    print("Using Spacy")
+                    cleaned_sents = [self.commentCleaner(comment)
+                                     for comment in comments]
+                else:
+                    print("Using NLTK")
+                    cleaned_sents = [self.commentCleaner(comment)
+                                     for comment in comments]
 
-            sents = [sent for sent in cleaned_sents if len(sent) != 0]
-            with open(self.sentence_file, "a+") as sent_file:
-                for line in sents:
-                    for sent in line:
-                        sent_file.write(sent + "\n")
-                        self.sent_count += 1
+                sents = [sent for sent in cleaned_sents if len(sent) != 0]
+                with open(self.sentence_file, "a+") as sent_file:
+                    for line in sents:
+                        for sent in line:
+                            sent_file.write(sent + "\n")
+                            self.sent_count += 1
+
+            elif self.mode == "userwise":
+                print("Cleaning sentences userwise")
+                if self.spacy_use:
+                    print("Using Spacy")
+                    for comment in comments:
+                        if comment["author"] not in self.users:
+                            self.users[comment["author"]] = self.commentCleaner(comment)
+                        else:
+                            self.users[comment["author"]] += self.commentCleaner(comment)
+                else:
+                    print("Using NLTK")
+                    for comment in comments:
+                        if comment["author"] not in self.users:
+                            self.users[comment["author"]] = self.commentCleaner(comment)
+                        else:
+                            self.users[comment["author"]] += self.commentCleaner(comment)
+
+                delkeys  = []
+                for key in self.users.keys():
+                    self.users[key] = [sent for sent in self.users[key] if len(sent) != 0]
+                    if len(self.users[key]) == 0:
+                        delkeys.append(key)
+
+                for key in delkeys:
+                    del(self.users[key])
+                        
+
+                self.sent_count = sum([len(sents) for sents in self.users.values()])
+
+                print(self.users)
+                with open(self.sentence_file, "w") as sent_file:
+                    json.dump(self.users, sent_file)
+                    
 
 
 if __name__ == "__main__":
@@ -249,6 +292,8 @@ if __name__ == "__main__":
                         help="Maximum number of retries before giving up")
     parser.add_argument("--counter_file", type=str, default="vocab_counter.pkl",
                         help="The pickle file containing counter information")
+    parser.add_argument("--mode", type=str, default="all",
+                        help="The mode in which to run the collection process")
     parser.add_argument("--collectionp_file", type=str, default="collection.pkl",
                         help="Pickle file containing collection progress")
     parser.add_argument("--sentence_file", type=str, default="sentences.txt",
@@ -269,5 +314,6 @@ if __name__ == "__main__":
                               counter_file=args.counter_file,
                               collectionp_file=args.collectionp_file,
                               sentence_file=args.sentence_file,
-                              spacy_use=args.spacy_use)
+                              spacy_use=args.spacy_use,
+                              mode=args.mode)
     ex.get_sentences()
